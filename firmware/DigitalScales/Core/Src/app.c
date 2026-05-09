@@ -13,6 +13,9 @@ volatile static uint32_t millisecond_counter;
 
 HX711_t hx711;
 
+// Static function prototypes
+static void splashscreen(void);
+
 void app_init(void)
 {
 	millisecond_counter = 0;
@@ -43,12 +46,18 @@ static float raw_to_display(int32_t raw)
 	return ((float)(raw + 8388608) / 16777215.0f) * 99.9f;
 }
 
+
+
 void app_loop(void)
 {
-	char buffer[8] = {};
+	splashscreen();
+	HAL_Delay(10000);
+	ssd1306_Fill(Black);
+	ssd1306_UpdateScreen(&hi2c1);
 
 	for(;;) {
 		int32_t raw;
+		char buffer[8] = {};
 		if (hx711_get_data(&hx711, &raw) == HAL_OK) {
 			float val = raw_to_display(raw);
 			sprintf(buffer, "%04.1f", val);
@@ -63,4 +72,51 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim == &htim6) {
 		++millisecond_counter;
 	}
+}
+
+static void drawboarder(void)
+{
+	for(uint8_t i=2; i < 126; i++) {
+		ssd1306_DrawPixel(i, 0, White);
+		ssd1306_DrawPixel(i, 1, White);
+		ssd1306_DrawPixel(i, 2, White);
+		ssd1306_DrawPixel(i, 61, White);
+		ssd1306_DrawPixel(i, 62, White);
+		ssd1306_DrawPixel(i, 63, White);
+	}
+	for(uint8_t i=2; i < 62; i++) {
+		ssd1306_DrawPixel(1, i, White);
+		ssd1306_DrawPixel(2, i, White);
+		ssd1306_DrawPixel(3, i, White);
+		ssd1306_DrawPixel(125, i, White);
+		ssd1306_DrawPixel(126, i, White);
+		ssd1306_DrawPixel(127, i, White);
+	}
+	ssd1306_UpdateScreen(&hi2c1);
+}
+
+static void splashscreen(void)
+{
+	uint8_t x = 18;
+	uint8_t y = 15;
+	FontDef f = Font_7x10;
+	const char *txt[4] = {
+		" Digi Scales\0",
+		"     for    \0",
+		" Riley & Max\0",
+		"\0"
+	};
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[0], f, White);
+	y += 12;
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[1], f, White);
+	y += 12;
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[2], f, White);
+	y += 12;
+	//ssd1306_SetCursor(x, y);
+	//ssd1306_WriteString(txt[3], f, White);
+	ssd1306_UpdateScreen(&hi2c1);
+	drawboarder();
 }
