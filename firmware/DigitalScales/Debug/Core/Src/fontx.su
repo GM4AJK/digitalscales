@@ -1,2 +1,0 @@
-../Core/Src/fontx.c:114:9:fontx_DrawChar	40	static
-../Core/Src/fontx.c:135:6:fontx_DrawString	16	static

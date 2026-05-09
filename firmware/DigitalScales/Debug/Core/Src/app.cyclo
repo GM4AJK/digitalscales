@@ -1,6 +1,0 @@
-../Core/Src/app.c:19:6:app_init	1
-../Core/Src/app.c:42:14:raw_to_display	3
-../Core/Src/app.c:51:6:app_loop	2
-../Core/Src/app.c:70:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/app.c:77:13:drawboarder	3
-../Core/Src/app.c:98:13:splashscreen	1
