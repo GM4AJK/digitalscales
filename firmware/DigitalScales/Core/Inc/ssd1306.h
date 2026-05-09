@@ -72,5 +72,7 @@ char ssd1306_WriteChar(char ch, FontDef Font, SSD1306_COLOR color);
 char ssd1306_WriteString(const char* str, FontDef Font, SSD1306_COLOR color);
 void ssd1306_SetCursor(uint8_t x, uint8_t y);
 void ssd1306_InvertColors(void);
+void ssd1306_DisplayOn(I2C_HandleTypeDef *hi2c);
+void ssd1306_DisplayOff(I2C_HandleTypeDef *hi2c);
 
 #endif  // _SSD1306_H
