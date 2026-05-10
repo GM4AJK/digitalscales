@@ -122,7 +122,7 @@ static void SH_splashscreen_begin(void)
 static void SH_splashscreen_continue(void)
 {
 	if(dncnt_timedout(DNCNT_SHARED)) {
-		display_clear(Black);
+		//display_clear(Black);
 		SM_set(APP_STATE_MEASURING);
 	}
 }
@@ -132,6 +132,9 @@ static void SH_measuring(void)
 	int32_t raw;
 	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
 		measure(raw);
+	}
+	else {
+		HAL_Delay(1);
 	}
 }
 

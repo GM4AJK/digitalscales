@@ -36,7 +36,7 @@ STM32G431KBTX_FLASH.ld  Linker script
 
 ## Key Peripherals (main.c)
 
-- **I2C1** — OLED display (timing 0x40B285C2)
+- **I2C1** — OLED display (timing 0x4052060F)
 - **TIM6** — 1 ms software tick; prescaler 170, period 1000 at 170 MHz PCLK
 - **GPIO PA4** output push-pull high-speed — HX711 CLK
 - **GPIO PA5** input no-pull — HX711 DATA
@@ -132,17 +132,47 @@ sprintf(buffer, "%04.1f", value);  // "03.5", "99.9" etc.
 If output is blank or "?", enable float support in the linker:
 **Properties → C/C++ Build → Settings → MCU GCC Linker → Miscellaneous**, add `-u _printf_float`.
 
+## Application State Machine (app.c)
+
+States: `STARTUP → SPLASHSCREEN_BEGIN → SPLASHSCREEN_CONTINUE → MEASURING`
+
+Each state has a dedicated `SH_*()` handler. `app_init()` sets the initial state and starts TIM6; `app_reinit()` does full peripheral init (display, HX711, measure module).
+
+### Countdown timer subsystem
+
+`DNCNT_e` enum + `dncnt_arr[]` array of `volatile uint32_t`, decremented every 1 ms in the TIM6 ISR.
+
+```c
+dncnt_set(DNCNT_SHARED, 10000);   // arm a 10-second timer
+if (dncnt_timedout(DNCNT_SHARED)) { ... }
+```
+
+Currently one timer (`DNCNT_SHARED`). Add entries to `DNCNT_e` (before `DNCNT_LAST`) to add more.
+
+## measure.c / measure.h
+
+Measurement and display logic extracted from app.c.
+
+```c
+void measure_set_i2c(I2C_HandleTypeDef *p_hi2c);  // call once from app_reinit()
+void measure(int32_t raw);                          // called from SH_measuring() when HX711 ready
+```
+
+`raw_to_display()` and `display_measurement_value()` are private statics. `raw_to_display()` is a throwaway mapping (raw → 0.0–99.9) for testing — remove when real calibration is implemented.
+
 ## Timing
 
-TIM6 fires an interrupt every 1 ms and increments `millisecond_counter` (volatile uint32_t in app.c).
+TIM6 fires an interrupt every 1 ms, increments `millisecond_counter` (volatile uint32_t in app.c), and decrements all non-zero `dncnt_arr[]` entries.
 
 ## Current Status
 
 - OLED display working with fontx large font ✓
 - SH1106 column offset fixed ✓
 - HX711 driver implemented and verified ✓
+- State machine with splashscreen implemented ✓
+- `measure.c` module extracted ✓
 - **Load cell not yet connected** — next session: connect load cell, implement tare + calibration
-- `raw_to_display()` in app.c is a throwaway mapping (raw → 0.0–99.9) for testing without a load cell — remove when calibration is implemented
+- `raw_to_display()` in measure.c is a throwaway mapping — remove when calibration is implemented
 
 ## Build & Flash
 
