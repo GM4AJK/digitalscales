@@ -1,11 +1,25 @@
 
 #include <stdio.h>
+#include <stdbool.h>
 #include "main.h"
+#include "app.h"
 #include "ssd1306.h"
 #include "fontx.h"
 #include "hx711.h"
+#include "measure.h"
 
 #define STR(x) (const uint8_t*)x,sizeof(x)-1
+
+typedef enum {
+	APP_STATE_STARTUP = 0,
+	APP_STATE_SPLASHSCREEN_BEGIN,
+	APP_STATE_SPLASHSCREEN_CONTINUE,
+	APP_STATE_MEASURING,
+	APP_STATE_LAST
+} APP_STATE_e;
+
+volatile APP_STATE_e app_state;
+volatile uint32_t dncnt_arr[DNCNT_LAST];
 
 // Defined in main.c
 extern I2C_HandleTypeDef hi2c1;
@@ -18,58 +32,64 @@ HX711_t hx711;
 
 // Static function prototypes
 static void splashscreen(void);
+static void SH_startup(void);
+static void SH_splashscreen_begin(void);
+static void SH_splashscreen_continue(void);
+static void SH_measuring(void);
+static inline APP_STATE_e SM_set(APP_STATE_e val);
+static inline APP_STATE_e SM_get();
+static void display_clear(SSD1306_COLOR color);
 
-
-
-void app_init(void)
+static void app_reinit(void)
 {
 	millisecond_counter = 0;
+	for(int i = 0; i < DNCNT_LAST; i++) {
+		dncnt_set((DNCNT_e)i, 0);
+	}
+
 	ssd1306_Init(&hi2c1);
-	HAL_Delay(1000);
+	HAL_Delay(100);
 	ssd1306_Fill(Black);
 	ssd1306_UpdateScreen(&hi2c1);
-	HAL_Delay(1000);
+	HAL_Delay(100);
 
 	hx711.CLK_GPIO = HX711_CLK_GPIO_Port;
 	hx711.CLK_Pin   = HX711_CLK_Pin;
 	hx711.DATA_GPIO = HX711_DT_GPIO_Port;
 	hx711.DATA_Pin  = HX711_DT_Pin;
 	hx711_init(&hx711, HX711_GAIN_A_128);
-
-	//fontx_DrawString("34.5", FONTX_CENTER_X, FONTX_CENTER_Y, White);
-	//ssd1306_UpdateScreen(&hi2c1);
-
-	HAL_TIM_Base_Start_IT(&htim6);
-
-	HAL_UART_Transmit(&hlpuart1, STR("Startup\r\n"), HAL_MAX_DELAY);
+	measure_set_i2c(&hi2c1);
+	HAL_UART_Transmit(&hlpuart1, STR("DigiScales v1.0\r\nStartup\r\n"), HAL_MAX_DELAY);
 }
 
-// Throwaway: map 24-bit signed raw value to 0.0 – 99.9 for display testing.
-// Remove when real load cell calibration is implemented.
-static float raw_to_display(int32_t raw)
+void app_init(void)
 {
-	if (raw < -8388608) raw = -8388608;
-	if (raw >  8388607) raw =  8388607;
-	return ((float)(raw + 8388608) / 16777215.0f) * 99.9f;
+	app_state = APP_STATE_STARTUP;
+	HAL_TIM_Base_Start_IT(&htim6);
 }
 
-
-
+/**
+ * Main application loop.
+ * This function handles the state machine. All states should be handled
+ * by a static state machine handler function SM_x().
+ */
 void app_loop(void)
 {
-	splashscreen();
-	HAL_Delay(10000);
-	ssd1306_Fill(Black);
-	ssd1306_UpdateScreen(&hi2c1);
-
 	for(;;) {
-		int32_t raw;
-		char buffer[8] = {};
-		if (hx711_get_data(&hx711, &raw) == HAL_OK) {
-			float val = raw_to_display(raw);
-			sprintf(buffer, "%04.1f", val);
-			fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
-			ssd1306_UpdateScreen(&hi2c1);
+		switch(app_state) {
+		default:
+		case APP_STATE_STARTUP:
+			SH_startup();
+			break;
+		case APP_STATE_SPLASHSCREEN_BEGIN:
+			SH_splashscreen_begin();
+			break;
+		case APP_STATE_SPLASHSCREEN_CONTINUE:
+			SH_splashscreen_continue();
+			break;
+		case APP_STATE_MEASURING:
+			SH_measuring();
+			break;
 		}
 	}
 }
@@ -78,6 +98,40 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if(htim == &htim6) {
 		++millisecond_counter;
+		for(int i = 0; i < DNCNT_LAST; i++) {
+			if(dncnt_arr[i] > 0) {
+				--dncnt_arr[i];
+			}
+		}
+	}
+}
+
+static void SH_startup(void)
+{
+	app_reinit();
+	SM_set(APP_STATE_SPLASHSCREEN_BEGIN);
+}
+
+static void SH_splashscreen_begin(void)
+{
+	splashscreen();
+	dncnt_set(DNCNT_SHARED, 10000); // Set a timer...
+	SM_set(APP_STATE_SPLASHSCREEN_CONTINUE); // ...and wait for it to time out.
+}
+
+static void SH_splashscreen_continue(void)
+{
+	if(dncnt_timedout(DNCNT_SHARED)) {
+		display_clear(Black);
+		SM_set(APP_STATE_MEASURING);
+	}
+}
+
+static void SH_measuring(void)
+{
+	int32_t raw;
+	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
+		measure(raw);
 	}
 }
 
@@ -127,3 +181,32 @@ static void splashscreen(void)
 	ssd1306_UpdateScreen(&hi2c1);
 	drawboarder();
 }
+
+static inline APP_STATE_e SM_set(APP_STATE_e val) {
+	APP_STATE_e prev = app_state;
+	app_state = val;
+	return prev;
+}
+static inline APP_STATE_e SM_get() {
+	return app_state;
+}
+
+bool dncnt_timedout(DNCNT_e i) {
+	return dncnt_get(i) == 0;
+}
+
+uint32_t dncnt_get(DNCNT_e i) {
+	return dncnt_arr[i];
+}
+
+uint32_t dncnt_set(DNCNT_e i, uint32_t val) {
+	uint32_t v = dncnt_arr[i];
+	dncnt_arr[i] = val;
+	return v;
+}
+
+static void display_clear(SSD1306_COLOR color) {
+	ssd1306_Fill(color);
+	ssd1306_UpdateScreen(&hi2c1);
+}
+
