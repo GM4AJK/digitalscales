@@ -5,9 +5,12 @@
 #include "fontx.h"
 #include "hx711.h"
 
+#define STR(x) (const uint8_t*)x,sizeof(x)-1
+
 // Defined in main.c
 extern I2C_HandleTypeDef hi2c1;
 extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef hlpuart1;
 
 volatile static uint32_t millisecond_counter;
 
@@ -15,6 +18,8 @@ HX711_t hx711;
 
 // Static function prototypes
 static void splashscreen(void);
+
+
 
 void app_init(void)
 {
@@ -35,6 +40,8 @@ void app_init(void)
 	//ssd1306_UpdateScreen(&hi2c1);
 
 	HAL_TIM_Base_Start_IT(&htim6);
+
+	HAL_UART_Transmit(&hlpuart1, STR("Startup\r\n"), HAL_MAX_DELAY);
 }
 
 // Throwaway: map 24-bit signed raw value to 0.0 – 99.9 for display testing.
