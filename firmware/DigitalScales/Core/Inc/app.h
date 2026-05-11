@@ -15,6 +15,7 @@ uint32_t dncnt_set(DNCNT_e i, uint32_t val);
 
 void app_init(void);
 void app_loop(void);
+void app_tick(void);
 
 
 

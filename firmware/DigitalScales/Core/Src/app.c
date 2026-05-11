@@ -23,12 +23,14 @@ volatile uint32_t dncnt_arr[DNCNT_LAST];
 
 // Defined in main.c
 extern I2C_HandleTypeDef hi2c1;
-extern TIM_HandleTypeDef htim6;
+//extern TIM_HandleTypeDef htim6;
 extern UART_HandleTypeDef hlpuart1;
 
-volatile static uint32_t millisecond_counter;
+volatile static uint64_t millisecond_counter;
 
 HX711_t hx711;
+
+measure_t measure;
 
 // Static function prototypes
 static void splashscreen(void);
@@ -49,29 +51,27 @@ static void app_reinit(void)
 
 	ssd1306_Init(&hi2c1);
 	HAL_Delay(100);
-	ssd1306_Fill(Black);
-	ssd1306_UpdateScreen(&hi2c1);
+	display_clear(Black);
 	HAL_Delay(100);
-
 	hx711.CLK_GPIO = HX711_CLK_GPIO_Port;
 	hx711.CLK_Pin   = HX711_CLK_Pin;
 	hx711.DATA_GPIO = HX711_DT_GPIO_Port;
 	hx711.DATA_Pin  = HX711_DT_Pin;
 	hx711_init(&hx711, HX711_GAIN_A_128);
-	measure_set_i2c(&hi2c1);
+	measure_init(&measure);
 	HAL_UART_Transmit(&hlpuart1, STR("DigiScales v1.0\r\nStartup\r\n"), HAL_MAX_DELAY);
 }
 
 void app_init(void)
 {
 	app_state = APP_STATE_STARTUP;
-	HAL_TIM_Base_Start_IT(&htim6);
+	//HAL_TIM_Base_Start_IT(&htim6);
 }
 
 /**
  * Main application loop.
  * This function handles the state machine. All states should be handled
- * by a static state machine handler function SM_x().
+ * by a static state machine handler function SH_x().
  */
 void app_loop(void)
 {
@@ -94,14 +94,12 @@ void app_loop(void)
 	}
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void app_tick(void)
 {
-	if(htim == &htim6) {
-		++millisecond_counter;
-		for(int i = 0; i < DNCNT_LAST; i++) {
-			if(dncnt_arr[i] > 0) {
-				--dncnt_arr[i];
-			}
+	++millisecond_counter;
+	for(int i = 0; i < DNCNT_LAST; i++) {
+		if(dncnt_arr[i] > 0) {
+			--dncnt_arr[i];
 		}
 	}
 }
@@ -131,7 +129,17 @@ static void SH_measuring(void)
 {
 	int32_t raw;
 	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
-		measure(raw);
+		measure_put(&measure, raw);
+		int32_t avg = measure_get_avg(&measure);
+		if (avg < -8388608) avg = -8388608;
+		if (avg >  8388607) avg =  8388607;
+		float f = ((float)(avg + 8388608) / 16777215.0f) * 99.9f;
+		char buffer[8] = {0};
+		sprintf(buffer, "%04.1f", f);
+		buffer[4] = '\0';
+		fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
+		ssd1306_UpdateScreen(&hi2c1);
+
 	}
 	else {
 		HAL_Delay(1);
@@ -140,21 +148,21 @@ static void SH_measuring(void)
 
 static void drawboarder(void)
 {
-	for(uint8_t i=2; i < 126; i++) {
+	for(uint8_t i=0; i < SSD1306_WIDTH; i++) {
 		ssd1306_DrawPixel(i, 0, White);
 		ssd1306_DrawPixel(i, 1, White);
 		ssd1306_DrawPixel(i, 2, White);
-		ssd1306_DrawPixel(i, 61, White);
-		ssd1306_DrawPixel(i, 62, White);
-		ssd1306_DrawPixel(i, 63, White);
+		ssd1306_DrawPixel(i, SSD1306_HEIGHT - 3, White);
+		ssd1306_DrawPixel(i, SSD1306_HEIGHT - 2, White);
+		ssd1306_DrawPixel(i, SSD1306_HEIGHT - 1, White);
 	}
-	for(uint8_t i=2; i < 62; i++) {
+	for(uint8_t i=0; i < SSD1306_HEIGHT; i++) {
+		ssd1306_DrawPixel(0, i, White);
 		ssd1306_DrawPixel(1, i, White);
 		ssd1306_DrawPixel(2, i, White);
-		ssd1306_DrawPixel(3, i, White);
-		ssd1306_DrawPixel(125, i, White);
-		ssd1306_DrawPixel(126, i, White);
-		ssd1306_DrawPixel(127, i, White);
+		ssd1306_DrawPixel(SSD1306_WIDTH - 3, i, White);
+		ssd1306_DrawPixel(SSD1306_WIDTH - 2, i, White);
+		ssd1306_DrawPixel(SSD1306_WIDTH - 1, i, White);
 	}
 	ssd1306_UpdateScreen(&hi2c1);
 }

@@ -12,35 +12,28 @@
 #include "measure.h"
 #include "app.h"
 
-static I2C_HandleTypeDef *p_display = NULL;
-
-// Throwaway: map 24-bit signed raw value to 0.0 – 99.9 for display testing.
-// Remove when real load cell calibration is implemented.
-static float raw_to_display(int32_t raw)
+void measure_init(measure_t *p)
 {
-	if (raw < -8388608) raw = -8388608;
-	if (raw >  8388607) raw =  8388607;
-	return ((float)(raw + 8388608) / 16777215.0f) * 99.9f;
+	p->in_samps = 0;
+	for(int i = 0; i < MEASURE_NUM_SAMPLES; i++) {
+		p->samples[i] = 0;
+	}
+}
+void measure_put(measure_t *p, int32_t val)
+{
+	p->samples[p->in_samps] = val;
+	p->in_samps++;
+	if(p->in_samps >= MEASURE_NUM_SAMPLES) {
+		p->in_samps = 0;
+	}
 }
 
-void measure_set_i2c(I2C_HandleTypeDef *p_hi2c)
+int32_t measure_get_avg(measure_t *p)
 {
-	p_display = p_hi2c;
+	int32_t rval = 0;
+	for(int i = 0; i < MEASURE_NUM_SAMPLES; i++) {
+		rval += p->samples[i];
+	}
+	return (int32_t)(rval / MEASURE_NUM_SAMPLES);
 }
-
-static void display_measurement_value(float val)
-{
-	char buffer[8] = {0};
-	sprintf(buffer, "%04.1f", val);
-	buffer[4] = '\0';
-	fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
-	ssd1306_UpdateScreen(p_display);
-}
-
-void measure(int32_t measurement)
-{
-	float val = raw_to_display(measurement);
-	display_measurement_value(val);
-}
-
 
