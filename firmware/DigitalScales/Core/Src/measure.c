@@ -7,8 +7,6 @@
 
 #include <stdio.h>
 
-#include "ssd1306.h"
-#include "fontx.h"
 #include "measure.h"
 #include "app.h"
 

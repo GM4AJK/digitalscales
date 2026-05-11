@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-#define MEASURE_NUM_SAMPLES 1000
+#define MEASURE_NUM_SAMPLES 4
 
 typedef struct
 {
