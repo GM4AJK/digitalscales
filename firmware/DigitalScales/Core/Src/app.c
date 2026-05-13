@@ -65,7 +65,6 @@ static void app_reinit(void)
 void app_init(void)
 {
 	app_state = APP_STATE_STARTUP;
-	//HAL_TIM_Base_Start_IT(&htim6);
 }
 
 /**
@@ -120,7 +119,7 @@ static void SH_splashscreen_begin(void)
 static void SH_splashscreen_continue(void)
 {
 	if(dncnt_timedout(DNCNT_SHARED)) {
-		//display_clear(Black);
+		display_clear(Black);
 		SM_set(APP_STATE_MEASURING);
 	}
 }
@@ -139,7 +138,6 @@ static void SH_measuring(void)
 		buffer[4] = '\0';
 		fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
 		ssd1306_UpdateScreen(&hi2c1);
-
 	}
 	else {
 		HAL_Delay(1);
@@ -193,30 +191,36 @@ static void splashscreen(void)
 	drawboarder();
 }
 
-static inline APP_STATE_e SM_set(APP_STATE_e val) {
+static inline APP_STATE_e SM_set(APP_STATE_e val)
+{
 	APP_STATE_e prev = app_state;
 	app_state = val;
 	return prev;
 }
-static inline APP_STATE_e SM_get() {
+static inline APP_STATE_e SM_get()
+{
 	return app_state;
 }
 
-bool dncnt_timedout(DNCNT_e i) {
+bool dncnt_timedout(DNCNT_e i)
+{
 	return dncnt_get(i) == 0;
 }
 
-uint32_t dncnt_get(DNCNT_e i) {
+uint32_t dncnt_get(DNCNT_e i)
+{
 	return dncnt_arr[i];
 }
 
-uint32_t dncnt_set(DNCNT_e i, uint32_t val) {
+uint32_t dncnt_set(DNCNT_e i, uint32_t val)
+{
 	uint32_t v = dncnt_arr[i];
 	dncnt_arr[i] = val;
 	return v;
 }
 
-static void display_clear(SSD1306_COLOR color) {
+static void display_clear(SSD1306_COLOR color)
+{
 	ssd1306_Fill(color);
 	ssd1306_UpdateScreen(&hi2c1);
 }
