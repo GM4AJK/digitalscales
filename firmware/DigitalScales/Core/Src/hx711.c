@@ -97,7 +97,7 @@ HAL_StatusTypeDef hx711_get_data(HX711_t *hx, int32_t *outval)
 	if (!hx711_is_ready(hx)) {
 		return HAL_BUSY;
 	}
-	*outval = read_raw(hx);
+	*outval = -read_raw(hx);
 	return HAL_OK;
 }
 

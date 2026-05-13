@@ -10,3 +10,4 @@ temp/
 temp/*
 *.FCBak
 */3mf/*
+logs/*

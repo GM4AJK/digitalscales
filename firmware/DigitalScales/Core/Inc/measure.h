@@ -29,4 +29,8 @@ void measure_init(measure_t *);
 void measure_put(measure_t *, int32_t);
 int32_t measure_get_avg(measure_t *);
 
+void measure_calibrate_init(measure_t *p);
+void measure_calibrate_put(measure_t *p, int32_t val);
+
+
 #endif /* INC_MEASURE_H_ */

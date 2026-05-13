@@ -14,6 +14,8 @@ typedef enum {
 	APP_STATE_STARTUP = 0,
 	APP_STATE_SPLASHSCREEN_BEGIN,
 	APP_STATE_SPLASHSCREEN_CONTINUE,
+	APP_STATE_CALIBRATION_BEGIN,
+	APP_STATE_CALIBRATION_CONTINUE,
 	APP_STATE_MEASURING,
 	APP_STATE_LAST
 } APP_STATE_e;
@@ -34,9 +36,13 @@ measure_t measure;
 
 // Static function prototypes
 static void splashscreen(void);
+static void calibrationscreen(void);
+
 static void SH_startup(void);
 static void SH_splashscreen_begin(void);
 static void SH_splashscreen_continue(void);
+static void SH_calibration_begin(void);
+static void SH_calibration_continue(void);
 static void SH_measuring(void);
 static inline APP_STATE_e SM_set(APP_STATE_e val);
 static inline APP_STATE_e SM_get();
@@ -59,7 +65,7 @@ static void app_reinit(void)
 	hx711.DATA_Pin  = HX711_DT_Pin;
 	hx711_init(&hx711, HX711_GAIN_A_128);
 	measure_init(&measure);
-	HAL_UART_Transmit(&hlpuart1, STR("DigiScales v1.0\r\nStartup\r\n"), HAL_MAX_DELAY);
+	//HAL_UART_Transmit(&hlpuart1, STR("DigiScales v1.0\r\nStartup\r\n"), HAL_MAX_DELAY);
 }
 
 void app_init(void)
@@ -85,6 +91,12 @@ void app_loop(void)
 			break;
 		case APP_STATE_SPLASHSCREEN_CONTINUE:
 			SH_splashscreen_continue();
+			break;
+		case APP_STATE_CALIBRATION_BEGIN:
+			SH_calibration_begin();
+			break;
+		case APP_STATE_CALIBRATION_CONTINUE:
+			SH_calibration_continue();
 			break;
 		case APP_STATE_MEASURING:
 			SH_measuring();
@@ -112,7 +124,7 @@ static void SH_startup(void)
 static void SH_splashscreen_begin(void)
 {
 	splashscreen();
-	dncnt_set(DNCNT_SHARED, 10000); // Set a timer...
+	dncnt_set(DNCNT_SHARED, 5000); // Set a timer...
 	SM_set(APP_STATE_SPLASHSCREEN_CONTINUE); // ...and wait for it to time out.
 }
 
@@ -120,7 +132,26 @@ static void SH_splashscreen_continue(void)
 {
 	if(dncnt_timedout(DNCNT_SHARED)) {
 		display_clear(Black);
-		SM_set(APP_STATE_MEASURING);
+		SM_set(APP_STATE_CALIBRATION_BEGIN);
+	}
+}
+
+static void SH_calibration_begin(void)
+{
+	calibrationscreen();
+	SM_set(APP_STATE_CALIBRATION_CONTINUE); // ...and wait for it to time out.
+}
+
+static void SH_calibration_continue(void)
+{
+	int32_t raw;
+	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
+		// We are calibrating, wait for calibration buffer to fill
+		measure_calibrate_put(&measure, raw);
+		if(measure.calibration_complete == true) {
+			HAL_UART_Transmit(&hlpuart1, STR("Millisec,Raw,Avg,Adj\r\n"), HAL_MAX_DELAY);
+			SM_set(APP_STATE_MEASURING);
+		}
 	}
 }
 
@@ -130,14 +161,21 @@ static void SH_measuring(void)
 	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
 		measure_put(&measure, raw);
 		int32_t avg = measure_get_avg(&measure);
+		int32_t adj = avg - measure.calibration_value;
+		//if(adj < 0) adj *= -1; // Abs
 		if (avg < -8388608) avg = -8388608;
 		if (avg >  8388607) avg =  8388607;
 		float f = ((float)(avg + 8388608) / 16777215.0f) * 99.9f;
-		char buffer[8] = {0};
+		char buffer[128] = {0};
 		sprintf(buffer, "%04.1f", f);
 		buffer[4] = '\0';
 		fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
 		ssd1306_UpdateScreen(&hi2c1);
+		buffer[0] = '\0';
+		int len = sprintf(buffer, "%d,%i,%i,%i\r\n", (int)millisecond_counter, (int)raw, (int)avg, (int)adj);
+		if(len > 0) {
+			HAL_UART_Transmit(&hlpuart1, (uint8_t*)buffer, len, HAL_MAX_DELAY);
+		}
 	}
 	else {
 		HAL_Delay(1);
@@ -174,6 +212,32 @@ static void splashscreen(void)
 		" Digi Scales\0",
 		"     for    \0",
 		" Riley & Max\0",
+		"\0"
+	};
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[0], f, White);
+	y += 12;
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[1], f, White);
+	y += 12;
+	ssd1306_SetCursor(x, y);
+	ssd1306_WriteString(txt[2], f, White);
+	y += 12;
+	//ssd1306_SetCursor(x, y);
+	//ssd1306_WriteString(txt[3], f, White);
+	ssd1306_UpdateScreen(&hi2c1);
+	drawboarder();
+}
+
+static void calibrationscreen(void)
+{
+	uint8_t x = 18;
+	uint8_t y = 15;
+	FontDef f = Font_7x10;
+	const char *txt[4] = {
+		" Digi Scales\0",
+		"            \0",
+		" Calibrating\0",
 		"\0"
 	};
 	ssd1306_SetCursor(x, y);
