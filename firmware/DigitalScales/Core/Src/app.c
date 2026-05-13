@@ -8,6 +8,9 @@
 #include "hx711.h"
 #include "measure.h"
 
+#define COUNTS_PER_KG  84000.0f
+#define INHIBIT_RETARE_WEIGHT 0.5f
+#define RETARE_TIME (5*60*1000)
 #define STR(x) (const uint8_t*)x,sizeof(x)-1
 
 typedef enum {
@@ -169,7 +172,7 @@ static void SH_measuring_begin(void)
 	display_clear(Black);
 	drawboarder();
 	zero_display();
-	dncnt_set(DNCNT_AUTO_TARE, (5*60*1000));
+	dncnt_set(DNCNT_AUTO_TARE, RETARE_TIME);
 	SM_set(APP_STATE_MEASURING_CONTINUE);
 }
 
@@ -178,17 +181,17 @@ static void SH_measuring_continue(void)
 	int32_t raw = 0;
 	if(dncnt_timedout(DNCNT_AUTO_TARE)) {
 		SM_set(APP_STATE_CALIBRATION_BEGIN);
+		return;
 	}
 
 	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
 		measure_put(&measure, raw);
 		int32_t avg = measure_get_avg(&measure);
 		int32_t adj = avg - measure.calibration_value;
-		float kg = (float)((float)adj / 84000.0);
-		//if(adj < 0) adj *= -1; // Abs
-		if (avg < -8388608) avg = -8388608;
-		if (avg >  8388607) avg =  8388607;
-		float f = ((float)(avg + 8388608) / 16777215.0f) * 99.9f;
+		float kg = (float)((float)adj / COUNTS_PER_KG);
+		if(kg > INHIBIT_RETARE_WEIGHT) {
+			dncnt_set(DNCNT_AUTO_TARE, RETARE_TIME);
+		}
 		char buffer[128] = {0};
 		sprintf(buffer, "%04.1f", kg);
 		buffer[4] = '\0';
@@ -199,6 +202,9 @@ static void SH_measuring_continue(void)
 		if(len > 0) {
 			HAL_UART_Transmit(&hlpuart1, (uint8_t*)buffer, len, HAL_MAX_DELAY);
 		}
+	}
+	else {
+		HAL_Delay(1);
 	}
 }
 
@@ -277,7 +283,7 @@ static void calibrationscreen(void)
 
 static void zero_display(void)
 {
-	char *s = "00.0";
+	const char *s = "00.0";
 	fontx_DrawString(s, FONTX_CENTER_X, FONTX_CENTER_Y, White);
 	ssd1306_UpdateScreen(&hi2c1);
 }
