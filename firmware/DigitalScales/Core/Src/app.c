@@ -16,7 +16,8 @@ typedef enum {
 	APP_STATE_SPLASHSCREEN_CONTINUE,
 	APP_STATE_CALIBRATION_BEGIN,
 	APP_STATE_CALIBRATION_CONTINUE,
-	APP_STATE_MEASURING,
+	APP_STATE_MEASURING_BEGIN,
+	APP_STATE_MEASURING_CONTINUE,
 	APP_STATE_LAST
 } APP_STATE_e;
 
@@ -35,6 +36,8 @@ HX711_t hx711;
 measure_t measure;
 
 // Static function prototypes
+static void drawboarder(void);
+static void zero_display(void);
 static void splashscreen(void);
 static void calibrationscreen(void);
 
@@ -43,7 +46,8 @@ static void SH_splashscreen_begin(void);
 static void SH_splashscreen_continue(void);
 static void SH_calibration_begin(void);
 static void SH_calibration_continue(void);
-static void SH_measuring(void);
+static void SH_measuring_begin(void);
+static void SH_measuring_continue(void);
 static inline APP_STATE_e SM_set(APP_STATE_e val);
 static inline APP_STATE_e SM_get();
 static void display_clear(SSD1306_COLOR color);
@@ -98,8 +102,11 @@ void app_loop(void)
 		case APP_STATE_CALIBRATION_CONTINUE:
 			SH_calibration_continue();
 			break;
-		case APP_STATE_MEASURING:
-			SH_measuring();
+		case APP_STATE_MEASURING_BEGIN:
+			SH_measuring_begin();
+			break;
+		case APP_STATE_MEASURING_CONTINUE:
+			SH_measuring_continue();
 			break;
 		}
 	}
@@ -138,7 +145,9 @@ static void SH_splashscreen_continue(void)
 
 static void SH_calibration_begin(void)
 {
+	display_clear(Black);
 	calibrationscreen();
+	measure_init(&measure);
 	SM_set(APP_STATE_CALIBRATION_CONTINUE); // ...and wait for it to time out.
 }
 
@@ -150,24 +159,38 @@ static void SH_calibration_continue(void)
 		measure_calibrate_put(&measure, raw);
 		if(measure.calibration_complete == true) {
 			HAL_UART_Transmit(&hlpuart1, STR("Millisec,Raw,Avg,Adj\r\n"), HAL_MAX_DELAY);
-			SM_set(APP_STATE_MEASURING);
+			SM_set(APP_STATE_MEASURING_BEGIN);
 		}
 	}
 }
 
-static void SH_measuring(void)
+static void SH_measuring_begin(void)
 {
-	int32_t raw;
+	display_clear(Black);
+	drawboarder();
+	zero_display();
+	dncnt_set(DNCNT_AUTO_TARE, (5*60*1000));
+	SM_set(APP_STATE_MEASURING_CONTINUE);
+}
+
+static void SH_measuring_continue(void)
+{
+	int32_t raw = 0;
+	if(dncnt_timedout(DNCNT_AUTO_TARE)) {
+		SM_set(APP_STATE_CALIBRATION_BEGIN);
+	}
+
 	if (hx711_get_data(&hx711, &raw) == HAL_OK) {
 		measure_put(&measure, raw);
 		int32_t avg = measure_get_avg(&measure);
 		int32_t adj = avg - measure.calibration_value;
+		float kg = (float)((float)adj / 84000.0);
 		//if(adj < 0) adj *= -1; // Abs
 		if (avg < -8388608) avg = -8388608;
 		if (avg >  8388607) avg =  8388607;
 		float f = ((float)(avg + 8388608) / 16777215.0f) * 99.9f;
 		char buffer[128] = {0};
-		sprintf(buffer, "%04.1f", f);
+		sprintf(buffer, "%04.1f", kg);
 		buffer[4] = '\0';
 		fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
 		ssd1306_UpdateScreen(&hi2c1);
@@ -250,6 +273,13 @@ static void calibrationscreen(void)
 	//ssd1306_WriteString(txt[3], f, White);
 	ssd1306_UpdateScreen(&hi2c1);
 	drawboarder();
+}
+
+static void zero_display(void)
+{
+	char *s = "00.0";
+	fontx_DrawString(s, FONTX_CENTER_X, FONTX_CENTER_Y, White);
+	ssd1306_UpdateScreen(&hi2c1);
 }
 
 static inline APP_STATE_e SM_set(APP_STATE_e val)
