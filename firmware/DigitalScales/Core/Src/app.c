@@ -177,9 +177,6 @@ static void SH_measuring(void)
 			HAL_UART_Transmit(&hlpuart1, (uint8_t*)buffer, len, HAL_MAX_DELAY);
 		}
 	}
-	else {
-		HAL_Delay(1);
-	}
 }
 
 static void drawboarder(void)
