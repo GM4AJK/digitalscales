@@ -245,12 +245,13 @@ static void SH_power_down_begin(void)
 {
 	display_clear(Black);
 	powerdownscreen();
-	dncnt_set(DNCNT_SHARED, 5000); // Set a timer...
+	dncnt_set(DNCNT_POWER_DOWN, 5000); // Set a timer...
+	SM_set(APP_STATE_POWER_DOWN_CONTINUE);
 }
 
 static void SH_power_down_continue(void)
 {
-	if(dncnt_timedout(DNCNT_SHARED)) {
+	if(dncnt_timedout(DNCNT_POWER_DOWN)) {
 		SM_set(APP_STATE_STARTUP);
 		ssd1306_DisplayOff(&hi2c1);
 		HAL_SuspendTick();

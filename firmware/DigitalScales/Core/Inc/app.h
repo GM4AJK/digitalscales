@@ -6,6 +6,7 @@
 typedef enum {
 	DNCNT_SHARED = 0,
 	DNCNT_AUTO_TARE,
+	DNCNT_POWER_DOWN,
 	DNCNT_LAST
 } DNCNT_e;
 
