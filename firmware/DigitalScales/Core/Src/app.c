@@ -12,6 +12,7 @@
 #define COUNTS_PER_KG  84000.0f
 #define INHIBIT_RETARE_WEIGHT 0.5f
 #define RETARE_TIME (5*60*1000)
+#define RETARE_RETRY_MAX 5
 #define STR(x) (const uint8_t*)x,sizeof(x)-1
 
 typedef enum {
@@ -27,6 +28,9 @@ typedef enum {
 
 volatile APP_STATE_e app_state;
 volatile uint32_t dncnt_arr[DNCNT_LAST];
+
+static float current_weight;
+static int auto_tare_retry_counter;
 
 // Defined in main.c
 extern I2C_HandleTypeDef hi2c1;
@@ -79,6 +83,8 @@ static void app_reinit(void)
 void app_init(void)
 {
 	app_state = APP_STATE_STARTUP;
+	current_weight = 0.0f;
+	auto_tare_retry_counter = 0;
 }
 
 /**
@@ -149,10 +155,28 @@ static void SH_splashscreen_continue(void)
 
 static void SH_calibration_begin(void)
 {
-	display_clear(Black);
-	calibrationscreen();
-	measure_init(&measure);
-	SM_set(APP_STATE_CALIBRATION_CONTINUE); // ...and wait for it to time out.
+	if(auto_tare_retry_counter > RETARE_RETRY_MAX) {
+		// If we reach the maximum number or re-tares
+		// then we assume one of the dogs has fallen
+		// asleep on the scales meaning it's bedtime
+		// so in this case we shutdown and wait for
+		// a reboot/power cycle.
+		ssd1306_DisplayOn(&hi2c1);
+		HAL_SuspendTick();
+		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+	}
+	else if(current_weight > INHIBIT_RETARE_WEIGHT) {
+		auto_tare_retry_counter++;
+		dncnt_set(DNCNT_AUTO_TARE, RETARE_TIME);
+		SM_set(APP_STATE_MEASURING_CONTINUE);
+	}
+	else {
+		display_clear(Black);
+		calibrationscreen();
+		auto_tare_retry_counter = 0;
+		measure_init(&measure);
+		SM_set(APP_STATE_CALIBRATION_CONTINUE); // ...and wait for it to time out.
+	}
 }
 
 static void SH_calibration_continue(void)
@@ -189,12 +213,9 @@ static void SH_measuring_continue(void)
 		measure_put(&measure, raw);
 		int32_t avg = measure_get_avg(&measure);
 		int32_t adj = avg - measure.calibration_value;
-		float kg = (float)((float)adj / COUNTS_PER_KG);
-		if(kg > INHIBIT_RETARE_WEIGHT) {
-			dncnt_set(DNCNT_AUTO_TARE, RETARE_TIME);
-		}
+		current_weight = (float)((float)adj / COUNTS_PER_KG);
 		char buffer[128] = {0};
-		sprintf(buffer, "%04.1f", kg);
+		sprintf(buffer, "%04.1f", current_weight);
 		buffer[4] = '\0';
 		fontx_DrawString(buffer, FONTX_CENTER_X, FONTX_CENTER_Y, White);
 		ssd1306_UpdateScreen(&hi2c1);
