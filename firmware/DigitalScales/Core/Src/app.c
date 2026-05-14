@@ -335,26 +335,8 @@ static void calibrationscreen(void)
 
 static void powerdownscreen(void)
 {
-	uint8_t x = 18;
-	uint8_t y = 15;
-	FontDef f = Font_7x10;
-	const char *txt[4] = {
-		"\0",
-		" Power Down \0",
-		"\0",
-		"\0"
-	};
-	ssd1306_SetCursor(x, y);
-	ssd1306_WriteString(txt[0], f, White);
-	y += 12;
-	ssd1306_SetCursor(x, y);
-	ssd1306_WriteString(txt[1], f, White);
-	y += 12;
-	ssd1306_SetCursor(x, y);
-	ssd1306_WriteString(txt[2], f, White);
-	y += 12;
-	//ssd1306_SetCursor(x, y);
-	//ssd1306_WriteString(txt[3], f, White);
+	ssd1306_SetCursor(18, 27);
+	ssd1306_WriteString(" Power Down ", Font_7x10, White);
 	ssd1306_UpdateScreen(&hi2c1);
 	drawboarder();
 }
