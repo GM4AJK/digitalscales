@@ -23,6 +23,8 @@ typedef enum {
 	APP_STATE_CALIBRATION_CONTINUE,
 	APP_STATE_MEASURING_BEGIN,
 	APP_STATE_MEASURING_CONTINUE,
+	APP_STATE_POWER_DOWN_BEGIN,
+	APP_STATE_POWER_DOWN_CONTINUE,
 	APP_STATE_LAST
 } APP_STATE_e;
 
@@ -47,6 +49,7 @@ measure_t measure;
 static void drawboarder(void);
 static void zero_display(void);
 static void splashscreen(void);
+static void powerdownscreen(void);
 static void calibrationscreen(void);
 
 static void SH_startup(void);
@@ -56,6 +59,8 @@ static void SH_calibration_begin(void);
 static void SH_calibration_continue(void);
 static void SH_measuring_begin(void);
 static void SH_measuring_continue(void);
+static void SH_power_down_begin(void);
+static void SH_power_down_continue(void);
 static inline APP_STATE_e SM_set(APP_STATE_e val);
 static inline APP_STATE_e SM_get();
 static void display_clear(SSD1306_COLOR color);
@@ -120,6 +125,12 @@ void app_loop(void)
 		case APP_STATE_MEASURING_CONTINUE:
 			SH_measuring_continue();
 			break;
+		case APP_STATE_POWER_DOWN_BEGIN:
+			SH_power_down_begin();
+			break;
+		case APP_STATE_POWER_DOWN_CONTINUE:
+			SH_power_down_continue();
+			break;
 		}
 	}
 }
@@ -163,9 +174,7 @@ static void SH_calibration_begin(void)
 		// asleep on the scales meaning it's bedtime
 		// so in this case we shutdown and wait for
 		// a reboot/power cycle.
-		ssd1306_DisplayOff(&hi2c1);
-		HAL_SuspendTick();
-		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+		SM_set(APP_STATE_POWER_DOWN_BEGIN);
 	}
 	else if(current_weight > INHIBIT_RETARE_WEIGHT) {
 		auto_tare_retry_counter++;
@@ -231,6 +240,25 @@ static void SH_measuring_continue(void)
 		HAL_Delay(1);
 	}
 }
+
+static void SH_power_down_begin(void)
+{
+	display_clear(Black);
+	powerdownscreen();
+	dncnt_set(DNCNT_POWER_DOWN, 5000); // Set a timer...
+	SM_set(APP_STATE_POWER_DOWN_CONTINUE);
+}
+
+static void SH_power_down_continue(void)
+{
+	if(dncnt_timedout(DNCNT_POWER_DOWN)) {
+		SM_set(APP_STATE_STARTUP);
+		ssd1306_DisplayOff(&hi2c1);
+		HAL_SuspendTick();
+		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+	}
+}
+
 
 static void drawboarder(void)
 {
@@ -301,6 +329,14 @@ static void calibrationscreen(void)
 	y += 12;
 	//ssd1306_SetCursor(x, y);
 	//ssd1306_WriteString(txt[3], f, White);
+	ssd1306_UpdateScreen(&hi2c1);
+	drawboarder();
+}
+
+static void powerdownscreen(void)
+{
+	ssd1306_SetCursor(18, 27);
+	ssd1306_WriteString(" Power Down ", Font_7x10, White);
 	ssd1306_UpdateScreen(&hi2c1);
 	drawboarder();
 }
