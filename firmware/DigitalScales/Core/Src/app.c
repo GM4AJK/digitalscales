@@ -66,6 +66,8 @@ static void app_reinit(void)
 	for(int i = 0; i < DNCNT_LAST; i++) {
 		dncnt_set((DNCNT_e)i, 0);
 	}
+	current_weight = 0.0f;
+	auto_tare_retry_counter = 0;
 
 	ssd1306_Init(&hi2c1);
 	HAL_Delay(100);
@@ -155,13 +157,13 @@ static void SH_splashscreen_continue(void)
 
 static void SH_calibration_begin(void)
 {
-	if(auto_tare_retry_counter > RETARE_RETRY_MAX) {
-		// If we reach the maximum number or re-tares
+	if(auto_tare_retry_counter >= RETARE_RETRY_MAX) {
+		// If we reach the maximum number of re-tares
 		// then we assume one of the dogs has fallen
 		// asleep on the scales meaning it's bedtime
 		// so in this case we shutdown and wait for
 		// a reboot/power cycle.
-		ssd1306_DisplayOn(&hi2c1);
+		ssd1306_DisplayOff(&hi2c1);
 		HAL_SuspendTick();
 		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 	}
