@@ -8,8 +8,7 @@
 #include "hx711.h"
 #include "measure.h"
 
-// ToDo, we need to calibrate the real COUNTS_PER_KG value, below is an estimate.
-#define COUNTS_PER_KG  84000.0f
+#define COUNTS_PER_KG  20981.48f
 #define INHIBIT_RETARE_WEIGHT 0.5f
 #define RETARE_TIME (5*60*1000)
 #define RETARE_RETRY_MAX 5
